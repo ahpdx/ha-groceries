@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_macros.html" import product, choices %}
+{% block head %}{% if run.status == 'resolving' %}<meta http-equiv="refresh" content="2">{% endif %}{% endblock %}
+
+{% block body %}
+<div class="row"><h1 class="grow">Run · {{ run.created_at|when }}</h1>
+  <span class="badge b-{{ {'submitted':'ok','partial':'unknown','abandoned':'skipped'}.get(run.status, 'confirm') }}">{{ run.status }}</span></div>
+{% if list_diet %}<p class="small">Whole list: {% for d in list_diet %}<span class="badge b-confirm">{{ diet_labels[d] }}</span> {% endfor %}</p>{% endif %}
+{% if run.message %}<div class="banner {{ 'ok' if run.status == 'submitted' else ('bad' if run.status == 'partial' else 'warn') }}">{{ run.message }}</div>{% endif %}
+{% if list_changed %}<div class="banner warn">Your list changed since this run started. <a href="{{ base }}/">Go to the list</a> to abandon this run and start a fresh one.</div>{% endif %}
+
+{% if run.status == 'resolving' %}
+  {% set done = lines|rejectattr('decision', 'equalto', 'pending')|list|length %}
+  <div class="card">Finding products… {{ done }} of {{ lines|length }} lines done.</div>
+{% endif %}
+
+{% for l in lines %}
+<div class="card" id="line-{{ l.line_no }}">
+  <div class="row">
+    <div class="grow"><strong>{{ l.quantity }}× {{ l.text or l.raw }}</strong>{% if l.note %} <span class="muted">({{ l.note }})</span>{% endif %}
+      {% for d in l.diet %}<span class="badge b-confirm">{{ diet_labels[d] }}</span>{% endfor %}</div>
+    {% if l.outcome != 'pending' %}<span class="badge b-{{ l.outcome }}">{{ {'ok':'added','unknown':'check the app','failed':'failed','skipped':'skipped'}[l.outcome] }}</span>
+    {% else %}<span class="badge b-{{ l.decision }}">{{ {'auto':'auto','chosen':'picked','confirm':'confirm','ask':'pick one','not_found':'not found','skipped':'skipped','pending':'…'}[l.decision] }}</span>{% endif %}
+  </div>
+  {% if l.reason and l.decision not in ('chosen', 'skipped') %}<div class="note">{{ l.reason }}</div>{% endif %}
+  {% set chosen = l.candidates|selectattr('upc', 'equalto', l.chosen_upc)|first if l.chosen_upc else none %}
+
+  {% if run.status != 'review' %}
+    {% if chosen and l.decision != 'skipped' %}<div style="margin-top:8px">{{ product(chosen) }}</div>{% endif %}
+  {% else %}
+  <form method="post" action="{{ base }}/runs/{{ run.run_id }}/line/{{ l.line_no }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if l.decision in ('auto', 'chosen') and chosen %}
+      <div style="margin-top:8px">{{ product(chosen) }}</div>
+      {% if l.sale_note and l.cheaper_upc %}
+        <div class="sale row"><span class="grow">Cheaper: {{ l.sale_note }}</span>
+          <button class="link" name="switch_upc" value="{{ l.cheaper_upc }}">Switch to this</button></div>
+      {% endif %}
+      <details><summary>Change</summary>{{ choices(l) }}</details>
+    {% elif l.decision == 'skipped' %}
+      <div class="row" style="margin-top:6px"><span class="grow muted">Skipped.</span><button name="action" value="unskip">Undo</button></div>
+    {% else %}
+      {% if l.sale_note and l.cheaper_upc %}<div class="sale">Cheaper: {{ l.sale_note }}</div>{% endif %}
+      {{ choices(l) }}
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
+
+
+
+{% if run.status == 'review' %}
+<div class="footer">
+  <div class="row">
+    <div class="grow small">~{{ estimate|money }} · {{ n_send }} ready{% if blockers %} · <strong>{{ blockers|length }} to decide</strong>{% endif %}</div>
+    {% if n_suggest %}
+    <form method="post" action="{{ base }}/runs/{{ run.run_id }}/accept"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button title="Use the preselected product on every row that's waiting">Accept {{ n_suggest }}</button></form>
+    {% endif %}
+    <form method="post" action="{{ base }}/runs/{{ run.run_id }}/submit"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="version" value="{{ run.version }}">
+      <button class="primary" {% if blockers or not n_send or not signed_in %}disabled{% endif %}>Add {{ n_send }} to cart</button></form>
+  </div>
+</div>
+<div class="row" style="margin-top:12px">
+  {% if not signed_in %}<span class="small grow"><a href="{{ base }}/settings">Sign in to Kroger</a> to add to your cart.</span>{% endif %}
+  <form method="post" action="{{ base }}/runs/{{ run.run_id }}/abandon"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="link small">Abandon this run</button></form>
+</div>
+{% elif run.status in ('submitted', 'partial', 'abandoned') %}
+<form method="post" action="{{ base }}/runs/{{ run.run_id }}/rerun" class="row"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <button>Start a run from this list</button>
+  {% if run.status != 'abandoned' %}<span class="small muted">Review your cart in the Kroger app before checkout.</span>{% endif %}
+</form>
+{% endif %}
+{% endblock %}

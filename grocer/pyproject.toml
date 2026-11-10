@@ -1,0 +1,28 @@
+[project]
+name = "grocer"
+version = "0.1.0"
+description = "Grocery list to Fred Meyer cart, as a Home Assistant add-on"
+requires-python = ">=3.12"
+dependencies = [
+  "starlette==1.10.0",
+  "uvicorn==0.54.0",
+  "jinja2==3.1.6",
+  "python-multipart==0.0.33",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.2.0", "httpx==0.28.1"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+grocer = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

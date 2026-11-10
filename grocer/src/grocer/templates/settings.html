@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Settings</h1>
+
+<div class="card">
+  <h2 style="margin-top:0">Kroger sign-in</h2>
+  {% if not configured %}
+    <p class="banner warn">Add your Kroger app's client ID and secret in the add-on's Configuration tab, then restart the add-on.</p>
+  {% elif status.signed_in %}
+    <p><span class="badge b-ok">signed in</span>{% if status.since %} <span class="small muted">since {{ status.since|ts }}</span>{% endif %}</p>
+    <form method="post" action="{{ base }}/auth/signout"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Sign out</button></form>
+  {% else %}
+    <p><span class="badge b-unknown">not signed in</span> Needed to add items to your cart. Searching works without it.</p>
+  {% endif %}
+
+  {% if configured %}
+  <ol class="small">
+    <li><form method="post" action="{{ base }}/auth/start" target="_blank" style="display:inline">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">{{ 'Sign in again' if status.signed_in else 'Sign in to Kroger' }}</button></form>
+      <div class="muted">Opens Kroger in a new tab. Sign in there.</div></li>
+    <li style="margin-top:8px">Kroger then sends you to an address starting with <code>{{ redirect_uri }}</code>. That page won't load, which is expected.</li>
+    <li style="margin-top:8px">Copy that whole address from the address bar, come back here and paste it:
+      <form method="post" action="{{ base }}/auth/finish" class="row" style="margin-top:6px">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="url" name="url" placeholder="{{ redirect_uri }}?code=…" required class="grow" style="flex:1 1 220px" autocomplete="off">
+        <button>Finish sign-in</button>
+      </form></li>
+  </ol>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Store</h2>
+  {% if location_id %}<p><strong>{{ location_name or 'Store' }}</strong> <span class="muted small">(location {{ location_id }})</span></p>
+  {% else %}<p class="banner warn">Choose your store. Prices and stock come from it.</p>{% endif %}
+  <form method="get" action="{{ base }}/settings" class="row">
+    <input type="text" name="zip" value="{{ zip }}" placeholder="ZIP code" inputmode="numeric" class="grow" style="flex:1 1 120px">
+    <button>Find stores</button>
+  </form>
+  {% if error %}<p class="banner bad">{{ error }}</p>{% endif %}
+  {% for s in stores %}
+    <form method="post" action="{{ base }}/settings" class="cand">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="location_id" value="{{ s.id }}">
+      <input type="hidden" name="location_name" value="{{ s.name }}">
+      <div class="grow"><strong>{{ s.name }}</strong><div class="small muted">{{ s.address }}</div></div>
+      <button {% if s.id == location_id %}disabled{% endif %}>{{ 'Current' if s.id == location_id else 'Use this' }}</button>
+    </form>
+  {% else %}{% if zip %}<p class="muted">No stores found near {{ zip }}.</p>{% endif %}{% endfor %}
+  <p class="small muted">Pickup or delivery is chosen in the Kroger app at checkout.</p>
+</div>
+{% endblock %}

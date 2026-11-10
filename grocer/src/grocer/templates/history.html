@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>History</h1>
+<div class="card"><table class="small">
+  <tr><th>When</th><th>Lines</th><th>Result</th></tr>
+  {% for r in runs %}
+  <tr><td><a href="{{ base }}/runs/{{ r.run_id }}">{{ r.created_at|when }}</a></td>
+    <td>{{ r.n_lines }}</td>
+    <td><span class="badge b-{{ {'submitted':'ok','partial':'unknown','abandoned':'skipped'}.get(r.status, 'confirm') }}">{{ r.status }}</span>
+      {% if r.n_ok %} {{ r.n_ok }} added{% endif %}{% if r.n_unknown %} · {{ r.n_unknown }} unconfirmed{% endif %}{% if r.n_failed %} · {{ r.n_failed }} failed{% endif %}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">No runs yet.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

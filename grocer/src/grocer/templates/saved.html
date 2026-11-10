@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% macro act(op, key='', upc='', label='', extra={}) %}
+<form method="post" action="{{ base }}/saved" style="display:inline">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="op" value="{{ op }}">
+  <input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="upc" value="{{ upc }}">
+  {% for k, v in extra.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <button class="link small">{{ label }}</button>
+</form>
+{% endmacro %}
+{% block body %}
+<h1>Saved items</h1>
+<div class="tabs">
+  <a href="{{ base }}/saved?tab=saved" class="{{ 'on' if tab == 'saved' }}">Picks</a>
+  <a href="{{ base }}/saved?tab=rejected" class="{{ 'on' if tab == 'rejected' }}">Never suggest</a>
+  <a href="{{ base }}/saved?tab=diet" class="{{ 'on' if tab == 'diet' }}">Diet overrides</a>
+  <a href="{{ base }}/saved?tab=aliases" class="{{ 'on' if tab == 'aliases' }}">Other names</a>
+</div>
+
+{% if tab == 'saved' %}
+  {% for key, items in groups.items() %}
+  <div class="card">
+    <div class="row"><strong class="grow">{{ key }}</strong>{{ act('forget', key, '', 'Forget all') }}</div>
+    <table class="small">
+    {% for it in items %}
+      <tr><td>{{ it.description or it.upc }}<div class="muted">{{ it.brand or '' }} {{ it.size or '' }}</div></td>
+        <td class="hide-sm">{{ it.times_chosen }}×<div class="muted">{{ (it.last_chosen_at or '')[:10] }}</div></td>
+        <td style="white-space:nowrap">
+          {% if it.pinned %}<strong>pinned</strong> {{ act('unpin', key, it.upc, 'Unpin') }}{% else %}{{ act('pin', key, it.upc, 'Always') }}{% endif %}
+          {{ act('forget', key, it.upc, 'Forget') }}</td></tr>
+    {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nothing yet. Every product you add to your cart is remembered here, so your usual items get picked automatically next time.</p>
+  {% endfor %}
+  <h2>Import purchase history</h2>
+  <p class="small muted">Coming soon: a bookmark you click on each fredmeyer.com trip page, then upload here.</p>
+
+{% elif tab == 'rejected' %}
+  <div class="card"><table class="small">
+  {% for r in rejected %}
+    <tr><td>{{ r.description or r.upc }}<div class="muted">{{ r.brand or '' }} {{ r.size or '' }}</div></td>
+      <td>{{ ('for “' ~ r.key ~ '”') if r.key else 'everywhere' }}</td>
+      <td>{{ act('unreject', r.key, r.upc, 'Allow again') }}</td></tr>
+  {% else %}<tr><td class="muted">None.</td></tr>{% endfor %}
+  </table></div>
+
+{% elif tab == 'diet' %}
+  <div class="card"><table class="small">
+  {% for o in overrides %}
+    <tr><td>{{ o.description or o.upc }}</td><td>{{ diet_labels.get(o.diet, o.diet) }}: {{ o.status }}</td>
+      <td>{{ act('unoverride', '', o.upc, 'Remove', {'diet': o.diet}) }}</td></tr>
+  {% else %}<tr><td class="muted">None.</td></tr>{% endfor %}
+  </table></div>
+
+{% elif tab == 'aliases' %}
+  <div class="card">
+    <table class="small">
+    {% for a in aliases %}
+      <tr><td>“{{ a.alias }}”</td><td>means “{{ a.key }}”</td><td>{{ act('unalias', '', '', 'Remove', {'alias': a.alias}) }}</td></tr>
+    {% else %}<tr><td class="muted">None yet. Searching for something else on a line teaches one.</td></tr>{% endfor %}
+    </table>
+    <form method="post" action="{{ base }}/saved" class="row" style="margin-top:10px">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="op" value="alias">
+      <input type="text" name="alias" placeholder="garbanzo beans" class="grow" style="flex:1 1 120px">
+      <span>means</span>
+      <input type="text" name="target" placeholder="chickpeas" class="grow" style="flex:1 1 120px">
+      <button>Add</button>
+    </form>
+  </div>
+{% endif %}
+{% endblock %}

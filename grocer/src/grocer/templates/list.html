@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Grocery list</h1>
+{% if open_run %}
+<div class="banner warn row">
+  <span class="grow">A run from {{ open_run.created_at|when }} is still open.</span>
+  <a class="btn" href="{{ base }}/runs/{{ open_run.run_id }}">Resume</a>
+  <form method="post" action="{{ base }}/runs/{{ open_run.run_id }}/abandon">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button>Abandon</button>
+  </form>
+</div>
+{% endif %}
+{% if not signed_in %}<div class="banner warn">You're not signed in to Kroger yet, so nothing can be added to your cart. <a href="{{ base }}/settings">Sign in</a></div>{% endif %}
+<form method="post" action="{{ base }}/runs" id="listform">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <textarea name="text" id="text" placeholder="Paste your list, one item per line.&#10;2 oat milk&#10;bananas&#10;bread (gluten free)&#10;diet: vegan" autofocus>{{ text }}</textarea>
+  <p class="small muted">Saved as you type. Quantities like <code>2 oat milk</code> or <code>milk x2</code>; diets like <code>(vegan)</code> per item or <code>diet: vegan</code> for everything.</p>
+  <div id="preview">{% include "_preview.html" %}</div>
+  <div class="row" style="margin-top:12px">
+    <button class="primary" {% if open_run %}disabled title="Resume or abandon the open run first"{% endif %}>Run</button>
+    <span class="small muted">Finds products for each line. Nothing goes to your cart until you approve it.</span>
+  </div>
+</form>
+<script>
+(function(){
+  var t=document.getElementById('text'), timer=null;
+  t.addEventListener('input', function(){
+    clearTimeout(timer);
+    timer=setTimeout(function(){
+      var body=new URLSearchParams({csrf: document.querySelector('input[name=csrf]').value, text: t.value});
+      fetch('{{ base }}/draft', {method:'POST', body: body, credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.text() : null; })
+        .then(function(h){ if(h!==null){ document.getElementById('preview').innerHTML=h; } });
+    }, 500);
+  });
+})();
+</script>
+{% endblock %}

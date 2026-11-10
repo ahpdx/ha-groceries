@@ -1,0 +1,15 @@
+{% if parsed.items %}
+<div class="card">
+  <div class="row"><strong class="grow">{{ parsed.items|length }} item{{ 's' if parsed.items|length != 1 }}</strong>
+  {% if parsed.list_diet %}<span class="badge b-confirm">all: {% for d in parsed.list_diet %}{{ diet_labels[d] }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</div>
+  <table class="small">
+  {% for it in parsed.items %}
+    <tr><td style="width:3em">{{ it.quantity }}×</td>
+      <td>{{ it.text }}{% if it.note %} <span class="muted">({{ it.note }})</span>{% endif %}
+        {% for d in it.diet %}<span class="badge b-confirm">{{ diet_labels[d] }}</span> {% endfor %}
+        {% if it.merged > 1 %}<span class="muted">· merged {{ it.merged }} lines</span>{% endif %}</td></tr>
+  {% endfor %}
+  </table>
+  {% if parsed.sections %}<p class="small muted">Section headers ignored: {{ parsed.sections|join(', ') }}</p>{% endif %}
+</div>
+{% endif %}

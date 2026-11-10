@@ -1,0 +1,21 @@
+name: Groceries
+version: "0.1.0"
+slug: grocer
+description: Turn a pasted grocery list into a Kroger-family store cart (Fred Meyer, Kroger, QFC, ...).
+url: https://github.com/ahpdx/ha-groceries
+arch:
+  - amd64
+init: false
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:cart-outline
+panel_title: Groceries
+panel_admin: true
+options:
+  client_id: ""
+  client_secret: ""
+schema:
+  client_id: str
+  client_secret: password

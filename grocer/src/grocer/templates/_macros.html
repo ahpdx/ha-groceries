@@ -1,0 +1,49 @@
+{% macro product(c, big=false) %}
+<div class="prod">
+  {% if c.image %}<img src="{{ c.image }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<div class="ph"></div>{% endif %}
+  <div class="grow">
+    <div><strong>{{ c.description }}</strong></div>
+    <div class="small muted">{{ c.brand or '' }}{% if c.brand and c.size %} · {% endif %}{{ c.size or '' }}{% if c.sold_by == 'WEIGHT' %} · sold by weight{% endif %}</div>
+    <div class="small">
+      {% if c.promo and c.price and c.promo < c.price %}<span class="price">{{ c.promo|money }}</span> <span class="was">{{ c.price|money }}</span>
+      {% else %}<span class="price">{{ c.price|money }}</span>{% endif %}{% if c.sold_by == 'WEIGHT' %}/lb{% endif %}
+      {% if c.unit_price and c.sold_by != 'WEIGHT' %}<span class="muted"> · {{ '%.2f'|format(c.unit_price * 100) }}¢/{{ c.unit_label }}</span>{% endif %}
+      · {% if c.stock == 'TEMPORARILY_OUT_OF_STOCK' %}<span class="badge b-failed">out of stock</span>{% elif c.stock == 'LOW' %}low stock{% elif c.stock == 'HIGH' %}in stock{% else %}<span class="muted">stock unknown</span>{% endif %}
+      {% if c.times_chosen %}<span class="muted"> · chosen {{ c.times_chosen }}×</span>{% endif %}{% if c.pinned %} · <strong>pinned</strong>{% endif %}
+    </div>
+    {% for d, v in (c.diet or {}).items() %}
+      <div class="small"><span class="badge b-{{ 'ok' if v.status in ('likely','ok_override') else v.status }}">{{ diet_labels[d] }}: {{ {'likely':'likely ok','ok_override':'ok (you)','unknown':'unknown','fails':'no'}[v.status] }}</span>
+      {% if v.reasons %}<span class="muted">{{ v.reasons|join('; ') }}</span>{% endif %}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro choices(l) %}
+  {% for c in l.candidates %}
+    <label class="cand"><input type="radio" name="upc" value="{{ c.upc }}" {% if c.upc == l.chosen_upc %}checked{% endif %}>
+      <div class="grow">{{ product(c) }}
+        <div class="row small" style="margin-top:4px">
+          <button class="link" name="reject_upc" value="{{ c.upc }}" formnovalidate>Never suggest for “{{ l.key }}”</button>
+          {% for d, v in (c.diet or {}).items() %}{% if v.status in ('unknown', 'fails') %}
+            <button class="link" name="override" value="{{ c.upc }}|{{ d }}|ok">Mark OK for {{ diet_labels[d] }}</button>
+          {% endif %}{% endfor %}
+        </div>
+      </div>
+    </label>
+  {% else %}
+    <p class="muted">Nothing matched. Try different words below.</p>
+  {% endfor %}
+  <div class="row" style="margin-top:8px">
+    <label class="small">Qty <input type="number" name="quantity" min="1" max="99" value="{{ l.quantity }}"></label>
+    <label class="small row" style="gap:6px"><input type="checkbox" name="pin" value="1"> Always pick this</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    {% if l.candidates %}<button class="primary" name="action" value="choose">Use this</button>{% endif %}
+    <button name="action" value="skip">Skip</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <input type="search" name="q" placeholder="Search instead…" class="grow" style="flex:1 1 160px">
+    <button name="action" value="search">Search</button>
+  </div>
+{% endmacro %}
