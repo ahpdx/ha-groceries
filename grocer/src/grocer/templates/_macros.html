@@ -9,7 +9,7 @@
       {% else %}<span class="price">{{ c.price|money }}</span>{% endif %}{% if c.sold_by == 'WEIGHT' %}/lb{% endif %}
       {% if c.unit_price and c.sold_by != 'WEIGHT' %}<span class="muted"> · {{ '%.2f'|format(c.unit_price * 100) }}¢/{{ c.unit_label }}</span>{% endif %}
       · {% if c.stock == 'TEMPORARILY_OUT_OF_STOCK' %}<span class="badge b-failed">out of stock</span>{% elif c.stock == 'LOW' %}low stock{% elif c.stock == 'HIGH' %}in stock{% else %}<span class="muted">stock unknown</span>{% endif %}
-      {% if c.times_chosen %}<span class="muted"> · chosen {{ c.times_chosen }}×</span>{% endif %}{% if c.pinned %} · <strong>pinned</strong>{% endif %}
+      {% if c.times_chosen %}<span class="muted"> · chosen {{ c.times_chosen }}×</span>{% elif c.bought_times %}<span class="muted"> · bought {{ c.bought_times }}×</span>{% endif %}{% if c.pinned %} · <strong>pinned</strong>{% endif %}
     </div>
     {% for d, v in (c.diet or {}).items() %}
       <div class="small"><span class="badge b-{{ 'ok' if v.status in ('likely','ok_override') else v.status }}">{{ diet_labels[d] }}: {{ {'likely':'likely ok','ok_override':'ok (you)','unknown':'unknown','fails':'no'}[v.status] }}</span>

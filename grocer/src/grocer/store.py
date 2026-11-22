@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS run_lines(
   decided_by TEXT, decided_at TEXT, outcome TEXT NOT NULL DEFAULT 'pending', outcome_detail TEXT, sent_at TEXT,
   PRIMARY KEY (run_id, line_no));
 CREATE TABLE IF NOT EXISTS settings(name TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS purchase_trips(
+  trip_id TEXT PRIMARY KEY, bought_on TEXT, kind TEXT, store TEXT, n_items INTEGER, imported_at TEXT);
+CREATE TABLE IF NOT EXISTS purchases(
+  trip_id TEXT, upc TEXT, name TEXT, size TEXT, quantity REAL, PRIMARY KEY (trip_id, upc));
 """
 
 OPEN_STATUSES = ("resolving", "review", "submitting")
@@ -124,16 +128,22 @@ class Store:
         rejections = {(r["key"], r["upc"]) for r in db.execute("SELECT key, upc FROM rejections")}
         overrides = {(r["upc"], r["diet"]): r["status"] for r in db.execute("SELECT upc, diet, status FROM diet_overrides")}
         aliases = {r["alias"]: r["key"] for r in db.execute("SELECT alias, key FROM aliases")}
-        return {"choices": choices, "rejections": rejections, "overrides": overrides, "aliases": aliases}
+        purchases = {r["upc"]: {"times": r["times"], "last": r["last"], "name": r["name"]} for r in db.execute(
+            "SELECT p.upc, COUNT(DISTINCT p.trip_id) AS times, MAX(t.bought_on) AS last, MAX(p.name) AS name "
+            "FROM purchases p JOIN purchase_trips t USING(trip_id) GROUP BY p.upc")}
+        return {"choices": choices, "rejections": rejections, "overrides": overrides, "aliases": aliases,
+                "purchases": purchases}
 
-    def record_choice(self, key: str, upc: str, source: str = "session", when: str | None = None) -> None:
+    def record_choice(self, key: str, upc: str, source: str = "session", when: str | None = None,
+                      times: int = 1) -> None:
+        """Count one more pick. `times` is used only when this (key, upc) is new (seeding from store history)."""
         when = when or now()
         self.db.execute(
-            "INSERT INTO choices(key,upc,times_chosen,first_chosen_at,last_chosen_at,source) VALUES(?,?,1,?,?,?) "
+            "INSERT INTO choices(key,upc,times_chosen,first_chosen_at,last_chosen_at,source) VALUES(?,?,?,?,?,?) "
             "ON CONFLICT(key,upc) DO UPDATE SET times_chosen=times_chosen+1, "
             "first_chosen_at=COALESCE(MIN(first_chosen_at, excluded.first_chosen_at), excluded.first_chosen_at), "
             "last_chosen_at=COALESCE(MAX(last_chosen_at, excluded.last_chosen_at), excluded.last_chosen_at)",
-            (key, upc, when, when, source))
+            (key, upc, max(1, times), when, when, source))
 
     def set_pin(self, key: str, upc: str, pinned: bool) -> None:
         if pinned:
@@ -191,6 +201,40 @@ class Store:
 
     def alias_items(self) -> list[dict]:
         return [dict(r) for r in self.db.execute("SELECT alias, key FROM aliases ORDER BY alias")]
+
+    # ------------------------------------------------------------ purchase history
+    def import_trips(self, trips: list[dict]) -> dict:
+        """Idempotent per trip_id. Returns counts."""
+        added = skipped = lines = 0
+        with self.tx() as c:
+            for t in trips:
+                if c.execute("SELECT 1 FROM purchase_trips WHERE trip_id=?", (t["id"],)).fetchone():
+                    skipped += 1
+                    continue
+                c.execute("INSERT INTO purchase_trips(trip_id,bought_on,kind,store,n_items,imported_at) VALUES(?,?,?,?,?,?)",
+                          (t["id"], t["date"], t.get("kind"), t.get("store"), len(t["items"]), now()))
+                for it in t["items"]:
+                    c.execute("INSERT OR IGNORE INTO purchases(trip_id,upc,name,size,quantity) VALUES(?,?,?,?,?)",
+                              (t["id"], it["upc"], it.get("name"), it.get("size"), it.get("qty")))
+                    lines += 1
+                added += 1
+        return {"added": added, "skipped": skipped, "lines": lines}
+
+    def purchase_summary(self) -> dict:
+        r = self.db.execute("SELECT COUNT(*) AS trips, MIN(bought_on) AS first, MAX(bought_on) AS last FROM purchase_trips").fetchone()
+        n = self.db.execute("SELECT COUNT(DISTINCT upc) FROM purchases").fetchone()[0]
+        return {"trips": r["trips"], "first": r["first"], "last": r["last"], "products": n}
+
+    def top_purchases(self, limit: int = 30) -> list[dict]:
+        return [dict(r) for r in self.db.execute(
+            "SELECT p.upc, MAX(p.name) AS name, MAX(p.size) AS size, COUNT(DISTINCT p.trip_id) AS times, "
+            "MAX(t.bought_on) AS last FROM purchases p JOIN purchase_trips t USING(trip_id) "
+            "GROUP BY p.upc ORDER BY times DESC, last DESC LIMIT ?", (limit,))]
+
+    def clear_purchases(self) -> None:
+        with self.tx() as c:
+            c.execute("DELETE FROM purchases")
+            c.execute("DELETE FROM purchase_trips")
 
     # ------------------------------------------------------------ runs
     def open_run(self) -> dict | None:

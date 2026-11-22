@@ -14,6 +14,7 @@
   <a href="{{ base }}/saved?tab=rejected" class="{{ 'on' if tab == 'rejected' }}">Never suggest</a>
   <a href="{{ base }}/saved?tab=diet" class="{{ 'on' if tab == 'diet' }}">Diet overrides</a>
   <a href="{{ base }}/saved?tab=aliases" class="{{ 'on' if tab == 'aliases' }}">Other names</a>
+  <a href="{{ base }}/saved?tab=history" class="{{ 'on' if tab == 'history' }}">Purchase history</a>
 </div>
 
 {% if tab == 'saved' %}
@@ -33,8 +34,7 @@
   {% else %}
   <p class="muted">Nothing yet. Every product you add to your cart is remembered here, so your usual items get picked automatically next time.</p>
   {% endfor %}
-  <h2>Import purchase history</h2>
-  <p class="small muted">Coming soon: a bookmark you click on each fredmeyer.com trip page, then upload here.</p>
+  <p class="small muted">Have past orders? <a href="{{ base }}/saved?tab=history">Import your purchase history</a> so your usual items are suggested from the first run.</p>
 
 {% elif tab == 'rejected' %}
   <div class="card"><table class="small">
@@ -52,6 +52,42 @@
       <td>{{ act('unoverride', '', o.upc, 'Remove', {'diet': o.diet}) }}</td></tr>
   {% else %}<tr><td class="muted">None.</td></tr>{% endfor %}
   </table></div>
+
+{% elif tab == 'history' %}
+  <div class="card">
+    {% if purchases.trips %}
+      <p><strong>{{ purchases.trips }} trip{{ 's' if purchases.trips != 1 }}</strong>, {{ purchases.products }} products,
+        {{ purchases.first }} to {{ purchases.last }}.</p>
+      <p class="small muted">Products you've bought are suggested first and shown as “you've bought this”. Once you confirm one for a list item, it's remembered as your usual.</p>
+    {% else %}
+      <p>No purchase history yet. Importing it means your usual products are suggested from the first run instead of asked about.</p>
+    {% endif %}
+    <h2>1. Collect your trips</h2>
+    <ol class="small">
+      <li>On a computer, show your browser's bookmarks bar and drag this button onto it:
+        <a class="btn primary" href="{{ collect_href }}" onclick="alert('Drag this button to your bookmarks bar, then use it on your store\'s website.');return false;">Collect grocery trip</a></li>
+      <li>On your store's website, open <b>Purchase History</b>, then a trip's <b>details</b>. When its items have loaded, click <b>Collect grocery trip</b>.</li>
+      <li>Go back, open the next trip and click it again. 10 to 20 recent trips is plenty.</li>
+      <li>Click <b>Download all</b> in the box it shows.</li>
+    </ol>
+    <p class="small muted">The bookmark reads only the page you're on and keeps the trips in that browser until you download them. It sends nothing anywhere.</p>
+    <h2>2. Import the file</h2>
+    <form method="post" action="{{ base }}/import" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p><label>History file from the bookmark<br><input type="file" name="file" accept=".json,application/json"></label></p>
+      <details><summary>Or paste its contents</summary><textarea name="text" style="min-height:120px"></textarea></details>
+      <p><button class="primary">Import</button> <span class="small muted">Importing the same trips again does nothing.</span></p>
+    </form>
+  </div>
+  {% if top_purchases %}
+  <h2>Most bought</h2>
+  <div class="card"><table class="small">
+    {% for p in top_purchases %}<tr><td>{{ p.name or p.upc }}<div class="muted">{{ p.size or '' }}</div></td>
+      <td style="white-space:nowrap">{{ p.times }}×<div class="muted">{{ p.last }}</div></td></tr>{% endfor %}
+  </table></div>
+  <form method="post" action="{{ base }}/import/clear" onsubmit="return confirm('Remove all imported purchase history? Your picks stay.')">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="link small">Remove imported history</button></form>
+  {% endif %}
 
 {% elif tab == 'aliases' %}
   <div class="card">

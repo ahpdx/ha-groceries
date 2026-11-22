@@ -43,6 +43,17 @@ def _days_since(ts: str | None) -> float | None:
     return max(0.0, (datetime.now(timezone.utc) - t).total_seconds() / 86400)
 
 
+PURCHASE_WEIGHT = 0.7          # imported store history counts, but less than picks made for this wording
+PURCHASE_CANDIDATES = 3
+
+
+def _purchase_score(b: dict | None) -> float:
+    if not b or not b.get("times"):
+        return 0.0
+    age = _days_since(b.get("last")) or 0.0
+    return PURCHASE_WEIGHT * min(1.0, math.log1p(b["times"]) / math.log1p(8)) * 0.5 ** (age / HALF_LIFE_DAYS)
+
+
 def _history_score(c: dict | None) -> float:
     if not c or not c.get("times_chosen"):
         return 0.0
@@ -69,7 +80,7 @@ def describe(p: Product) -> str:
 
 
 def candidate_dict(p: Product, *, diets: list[str], overrides: dict, choice: dict | None,
-                   score: float = 0.0, why: list[str] | None = None) -> dict:
+                   score: float = 0.0, why: list[str] | None = None, bought: dict | None = None) -> dict:
     size = parse_size(p.size)
     up = unit_price(p.effective_price, size)
     d = p.to_cache()
@@ -82,6 +93,8 @@ def candidate_dict(p: Product, *, diets: list[str], overrides: dict, choice: dic
         "times_chosen": (choice or {}).get("times_chosen", 0),
         "last_chosen_at": (choice or {}).get("last_chosen_at"),
         "pinned": bool((choice or {}).get("pinned")),
+        "bought_times": (bought or {}).get("times", 0),
+        "bought_last": (bought or {}).get("last"),
     })
     return d
 
@@ -92,6 +105,7 @@ def resolve(client: KrogerClient, memory: dict, *, key: str, text: str, note: st
     remembered = sorted(by_upc.values(), key=lambda c: (-c["pinned"], -c["times_chosen"]))[:5]
     rejected = {u for (k, u) in memory["rejections"] if k in (key, "")}
     overrides = memory["overrides"]
+    purchases = memory.get("purchases", {})
 
     # --- retrieval
     seen: dict[str, Product] = {}
@@ -114,6 +128,15 @@ def resolve(client: KrogerClient, memory: dict, *, key: str, text: str, note: st
     if top_brand:
         for p in client.search(key, location_id, limit=10, brand=top_brand):
             seen.setdefault(p.upc, p)
+    # Products from your imported store history whose names match this line ("oat milk" -> "Planet Oat ... Oat Milk").
+    qtok_all = {t for t in tokens(query) if t not in _STOP}
+    if purchases and qtok_all:
+        matches = [(info["times"], upc) for upc, info in purchases.items()
+                   if upc not in seen and all(token_hit(q, set(tokens(info.get("name") or ""))) for q in qtok_all)]
+        for _, upc in sorted(matches, reverse=True)[:PURCHASE_CANDIDATES]:
+            p = client.product(upc, location_id)
+            if p:
+                seen[p.upc] = p
     all_seen = list(seen.values())
 
     # --- hard filters
@@ -147,6 +170,10 @@ def resolve(client: KrogerClient, memory: dict, *, key: str, text: str, note: st
         h = _history_score(c)
         if c and c["times_chosen"]:
             why.append(f"history:{c['times_chosen']}")
+        ph = _purchase_score(purchases.get(p.upc)) if _relevance(qtok, p) >= 0.5 else 0.0
+        if ph:
+            why.append(f"bought:{purchases[p.upc]['times']}")
+        h = max(h, ph)
         b = min(1.0, brand_counts.get(p.brand or "", 0) / 3)
         if b:
             why.append("brand_affinity")
@@ -173,7 +200,8 @@ def resolve(client: KrogerClient, memory: dict, *, key: str, text: str, note: st
     scored.sort(key=lambda t: -t[0])
 
     def cand(p: Product, score: float = 0.0, why=None) -> dict:
-        return candidate_dict(p, diets=diets, overrides=overrides, choice=by_upc.get(p.upc), score=score, why=why)
+        return candidate_dict(p, diets=diets, overrides=overrides, choice=by_upc.get(p.upc), score=score, why=why,
+                              bought=purchases.get(p.upc))
 
     if not scored:
         return Resolution("not_found", "nothing matched at this store", None, [], seen=all_seen)
@@ -218,6 +246,11 @@ def resolve(client: KrogerClient, memory: dict, *, key: str, text: str, note: st
         return _with_cheaper(res, top, scored, qtok, cand, diet_ok)
     if c0 and c0["times_chosen"] >= 1:
         res = Resolution("confirm", f"chosen once before ({(c0.get('last_chosen_at') or '')[:10]})", top.upc,
+                         [cand(top, s0, w0)] + top3({top.upc})[:2], seen=all_seen)
+        return _with_cheaper(res, top, scored, qtok, cand, diet_ok)
+    b0 = purchases.get(top.upc)
+    if b0 and "bought:" in " ".join(w0):
+        res = Resolution("confirm", f"you've bought this {b0['times']}× (last {(b0.get('last') or '')[:10]})", top.upc,
                          [cand(top, s0, w0)] + top3({top.upc})[:2], seen=all_seen)
         return _with_cheaper(res, top, scored, qtok, cand, diet_ok)
     return Resolution("ask", "new item: pick one", top.upc, top3(), seen=all_seen)

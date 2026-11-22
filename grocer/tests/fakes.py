@@ -23,6 +23,12 @@ class FakeKroger:
         self.searches = []
         self.configured = True
 
+    def sign_in_status(self):
+        return {"signed_in": self.signed_in}
+
+    def locations(self, zip_code, limit=10):
+        return []
+
     def search(self, term, location_id, limit=25, brand=None):
         self.searches.append((term, brand))
         q = set(tokens(term))

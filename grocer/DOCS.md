@@ -20,6 +20,9 @@ chosen automatically next time. Nothing is added to your cart until you press **
 - **Review:** items you buy often are picked automatically. New items show the top matches to choose
   from. Cheaper options that meet the same needs are pointed out, with a one-tap switch.
 - **Add to cart**, then review and check out in the Kroger app. Pickup or delivery is chosen there.
+- **Purchase history (optional):** on **Saved → Purchase history**, drag the **Collect grocery trip**
+  button to your bookmarks bar. Click it on each trip's Purchase Details page on your store's website,
+  then **Download all** and upload the file. Products you've bought are then suggested from the first run.
 
 ## Limits
 

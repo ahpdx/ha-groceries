@@ -5,7 +5,7 @@
 {% block body %}
 <div class="row"><h1 class="grow">Run · {{ run.created_at|when }}</h1>
   <span class="badge b-{{ {'submitted':'ok','partial':'unknown','abandoned':'skipped'}.get(run.status, 'confirm') }}">{{ run.status }}</span></div>
-{% if list_diet %}<p class="small">Whole list: {% for d in list_diet %}<span class="badge b-confirm">{{ diet_labels[d] }}</span> {% endfor %}</p>{% endif %}
+{% if list_diet %}<p class="small">Whole list: {% for d in list_diet %}<span class="badge">{{ diet_labels[d] }}</span> {% endfor %}</p>{% endif %}
 {% if run.message %}<div class="banner {{ 'ok' if run.status == 'submitted' else ('bad' if run.status == 'partial' else 'warn') }}">{{ run.message }}</div>{% endif %}
 {% if list_changed %}<div class="banner warn">Your list changed since this run started. <a href="{{ base }}/">Go to the list</a> to abandon this run and start a fresh one.</div>{% endif %}
 
@@ -18,7 +18,7 @@
 <div class="card" id="line-{{ l.line_no }}">
   <div class="row">
     <div class="grow"><strong>{{ l.quantity }}× {{ l.text or l.raw }}</strong>{% if l.note %} <span class="muted">({{ l.note }})</span>{% endif %}
-      {% for d in l.diet %}<span class="badge b-confirm">{{ diet_labels[d] }}</span>{% endfor %}</div>
+      {% for d in l.diet %}<span class="badge">{{ diet_labels[d] }}</span>{% endfor %}</div>
     {% if l.outcome != 'pending' %}<span class="badge b-{{ l.outcome }}">{{ {'ok':'added','unknown':'check the app','failed':'failed','skipped':'skipped'}[l.outcome] }}</span>
     {% else %}<span class="badge b-{{ l.decision }}">{{ {'auto':'auto','chosen':'picked','confirm':'confirm','ask':'pick one','not_found':'not found','skipped':'skipped','pending':'…'}[l.decision] }}</span>{% endif %}
   </div>

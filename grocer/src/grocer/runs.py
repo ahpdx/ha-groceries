@@ -203,10 +203,16 @@ def submit(store: Store, client: KrogerClient, run_id: str, *, version: int) -> 
         store.transition(run_id, ("submitting",), "review", message=msg)
         return {"status": "review", "outcome": "failed", "sent": 0, "message": msg}
 
+    memory = store.memory()
+    known = {(c["key"], c["upc"]) for c in memory["choices"] if c["times_chosen"]}
     for l in to_send:
         store.update_line(run_id, l["line_no"], outcome=result.outcome, outcome_detail=result.detail or None)
         if result.outcome in ("ok", "unknown"):
-            store.record_choice(l["key"], l["chosen_upc"])
+            # First time this product is used for this wording: if store history shows you buy it
+            # regularly, start it as a usual (auto next time) rather than from one pick.
+            bought = memory["purchases"].get(l["chosen_upc"], {}).get("times", 0)
+            seed = min(3, bought) if (l["key"], l["chosen_upc"]) not in known and bought >= 2 else 1
+            store.record_choice(l["key"], l["chosen_upc"], times=seed)
     for l in lines:
         if l["decision"] == "skipped":
             store.update_line(run_id, l["line_no"], outcome="skipped")

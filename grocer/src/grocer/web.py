@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Route
 
+from . import history as historymod
 from . import runs
 from .config import Config
 from .kroger import KrogerClient, KrogerError
@@ -23,6 +24,13 @@ from .store import Store
 from .text import DIET_LABELS, parse_list
 
 TEMPLATES = Path(__file__).parent / "templates"
+STATIC = Path(__file__).parent / "static"
+
+
+def bookmarklet(name: str) -> str:
+    """A javascript: URL built from static/<name> (comment lines dropped, everything else encoded)."""
+    code = "\n".join(l for l in (STATIC / name).read_text().splitlines() if not l.strip().startswith("//"))
+    return "javascript:" + urllib.parse.quote(code, safe="(){}[];,:=>!'*.+-/$?&|\"<>`@~^ ")
 AUTH_TTL = 15 * 60
 
 
@@ -200,6 +208,8 @@ def build_app(config: Config, store: Store | None = None, client: KrogerClient |
         for it in items:
             groups.setdefault(it["key"], []).append(it)
         return render(request, "saved.html", groups=groups, rejected=store.rejected_items(),
+                      purchases=store.purchase_summary(), top_purchases=store.top_purchases(),
+                      collect_href=bookmarklet("collect.js"),
                       overrides=store.override_items(), aliases=store.alias_items(),
                       tab=request.query_params.get("tab", "saved"), msg=request.query_params.get("msg"))
 
@@ -227,6 +237,31 @@ def build_app(config: Config, store: Store | None = None, client: KrogerClient |
             store.remove_alias(str(f.get("alias", "")))
             tab = "aliases"
         return go(request, f"/saved?tab={tab}")
+
+    async def import_history(request: Request):
+        f = await form(request)
+        upload = f.get("file")
+        raw = b""
+        if upload is not None and hasattr(upload, "read"):
+            raw = await upload.read(historymod.MAX_BYTES + 1)
+        if not raw.strip():
+            raw = str(f.get("text", "")).encode()
+        if not raw.strip():
+            return go(request, "/saved?tab=history", "Choose the file the bookmark downloaded, or paste its contents.")
+        try:
+            trips = historymod.parse(raw)
+        except historymod.ImportError_ as e:
+            return go(request, "/saved?tab=history", str(e))
+        r = store.import_trips(trips)
+        msg = f"Imported {r['added']} trip(s), {r['lines']} item(s)."
+        if r["skipped"]:
+            msg += f" {r['skipped']} trip(s) were already imported."
+        return go(request, "/saved?tab=history", msg)
+
+    async def clear_history(request: Request):
+        await form(request)
+        store.clear_purchases()
+        return go(request, "/saved?tab=history", "Imported purchase history removed. Your picks are unchanged.")
 
     async def history(request: Request):
         return render(request, "history.html", runs=store.runs())
@@ -306,6 +341,7 @@ def build_app(config: Config, store: Store | None = None, client: KrogerClient |
         Route("/runs/{run_id}/accept", accept, methods=["POST"]), Route("/runs/{run_id}/submit", submit, methods=["POST"]),
         Route("/runs/{run_id}/abandon", abandon, methods=["POST"]), Route("/runs/{run_id}/rerun", rerun, methods=["POST"]),
         Route("/saved", saved), Route("/saved", saved_action, methods=["POST"]), Route("/history", history),
+        Route("/import", import_history, methods=["POST"]), Route("/import/clear", clear_history, methods=["POST"]),
         Route("/settings", settings), Route("/settings", settings_save, methods=["POST"]),
         Route("/auth/start", auth_start, methods=["POST"]), Route("/auth/finish", auth_finish, methods=["POST"]),
         Route("/auth/signout", sign_out, methods=["POST"]), Route("/healthz", health),
