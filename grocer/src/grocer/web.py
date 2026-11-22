@@ -278,7 +278,7 @@ def build_app(config: Config, store: Store | None = None, client: KrogerClient |
         return render(request, "settings.html", location_id=store.setting("location_id"),
                       location_name=store.setting("location_name"), zip=zip_code, stores=stores, error=error,
                       redirect_uri=config.redirect_uri, msg=request.query_params.get("msg"),
-                      status=client.sign_in_status(), pending=bool(store.setting("pending_auth")))
+                      status=client.sign_in_status(), auth_url=_pending_auth_url())
 
     async def settings_save(request: Request):
         f = await form(request)
@@ -288,13 +288,22 @@ def build_app(config: Config, store: Store | None = None, client: KrogerClient |
             store.set_setting("location_name", str(f.get("location_name", "")).strip()[:120])
         return go(request, "/settings", "Saved.")
 
+    def _pending_auth_url() -> str | None:
+        pending = json.loads(store.setting("pending_auth") or "null")
+        if pending and pending.get("url") and time.time() - pending["at"] <= AUTH_TTL:
+            return pending["url"]
+        return None
+
     async def auth_start(request: Request):
+        # Stays inside the add-on page. The page then offers a plain link to kroger.com that opens in a new tab:
+        # opening the add-on's own (Ingress) address in a new tab fails, so only Kroger's page opens there.
         await form(request)
         if not client.configured:
             return go(request, "/settings", "Add your Kroger app keys in the add-on configuration first.")
         state, verifier, challenge = KrogerClient.new_pkce()
-        store.set_setting("pending_auth", json.dumps({"state": state, "verifier": verifier, "at": time.time()}))
-        return RedirectResponse(client.authorize_url(state, challenge), status_code=303)
+        store.set_setting("pending_auth", json.dumps({"state": state, "verifier": verifier, "at": time.time(),
+                                                      "url": client.authorize_url(state, challenge)}))
+        return go(request, "/settings#signin")
 
     async def auth_finish(request: Request):
         f = await form(request)

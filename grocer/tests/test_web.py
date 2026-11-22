@@ -77,9 +77,13 @@ def test_sign_in_paste_flow(tmp_path):
     kc.exchange_code = lambda code, verifier: got.update(code=code, verifier=verifier)
     c = TestClient(build_app(cfg, store, kc), follow_redirects=False)
     tok = csrf(c.get("/settings").text)
-    r = c.post("/auth/start", data={"csrf": tok})
-    assert r.status_code == 303 and r.headers["location"].startswith("https://api.kroger.com/v1/connect/oauth2/authorize?")
-    state = re.search(r"state=([^&]+)", r.headers["location"]).group(1)
+    r = c.post("/auth/start", data={"csrf": tok}, headers={"X-Ingress-Path": "/api/hassio_ingress/abc"})
+    # Stays inside the add-on (never sends the new tab to an Ingress address); the page then links to Kroger.
+    assert r.status_code == 303 and r.headers["location"] == "/api/hassio_ingress/abc/settings#signin"
+    page = c.get("/settings").text
+    link = re.search(r'href="(https://api\.kroger\.com/v1/connect/oauth2/authorize\?[^"]+)" target="_blank"', page).group(1)
+    assert "Open Kroger sign-in" in page and 'action="/auth/start"' not in page
+    state = re.search(r"state=([^&]+)", link.replace("&amp;", "&")).group(1)
     r = c.post("/auth/finish", data={"csrf": tok, "url": "http://localhost:8000/callback?code=X&state=wrong"})
     assert "doesn" in r.headers["location"] and not got
     r = c.post("/auth/finish", data={"csrf": tok, "url": f"http://localhost:8000/callback?code=ABC&state={state}"})

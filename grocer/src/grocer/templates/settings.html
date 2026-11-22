@@ -15,9 +15,15 @@
 
   {% if configured %}
   <ol class="small">
-    <li><form method="post" action="{{ base }}/auth/start" target="_blank" style="display:inline">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">{{ 'Sign in again' if status.signed_in else 'Sign in to Kroger' }}</button></form>
-      <div class="muted">Opens Kroger in a new tab. Sign in there.</div></li>
+    <li id="signin">
+      {% if auth_url %}
+        <a class="btn primary" href="{{ auth_url }}" target="_blank" rel="noopener noreferrer">Open Kroger sign-in ↗</a>
+        <div class="muted">Opens Kroger in a new tab. Sign in there. This link works for 15 minutes.</div>
+      {% else %}
+        <form method="post" action="{{ base }}/auth/start" style="display:inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">{{ 'Sign in again' if status.signed_in else 'Sign in to Kroger' }}</button></form>
+        <div class="muted">Prepares a sign-in link to Kroger.</div>
+      {% endif %}</li>
     <li style="margin-top:8px">Kroger then sends you to an address starting with <code>{{ redirect_uri }}</code>. That page won't load, which is expected.</li>
     <li style="margin-top:8px">Copy that whole address from the address bar, come back here and paste it:
       <form method="post" action="{{ base }}/auth/finish" class="row" style="margin-top:6px">

@@ -1,5 +1,5 @@
 name: Groceries
-version: "0.2.0"
+version: "0.2.1"
 slug: grocer
 description: Turn a pasted grocery list into a Kroger-family store cart (Fred Meyer, Kroger, QFC, ...).
 url: https://github.com/ahpdx/ha-groceries
